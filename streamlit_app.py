@@ -5,7 +5,6 @@ import seaborn as sns
 
 @st.cache_data
 def load_data():
-    # Misalnya, all_data sudah dibaca dari file CSV
     all_data = pd.read_csv("main_data.csv", parse_dates=["dteday"])
     return all_data
 
