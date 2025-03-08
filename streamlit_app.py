@@ -1,57 +1,53 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
-import zipfile
+import seaborn as sns
 
-# Mengatur halaman Streamlit
-st.set_page_config(page_title='Bike Sharing Analysis', layout='wide')
+@st.cache_data
+def load_data():
+    # Misalnya, all_data sudah dibaca dari file CSV
+    all_data = pd.read_csv("main_data.csv", parse_dates=["dteday"])
+    return all_data
 
-# Data Wrangling
-with zipfile.ZipFile('/mnt/data/Bike-sharing-dataset.zip', 'r') as z:
-    z.extractall('/mnt/data/')
+# Load dataset
+all_data = load_data()
 
-df = pd.read_csv('/mnt/data/hour.csv')
-df['dteday'] = pd.to_datetime(df['dteday'])
+# Sidebar untuk filter tanggal
+st.sidebar.header("Filter Data")
+start_date = st.sidebar.date_input("Start Date", value=all_data["dteday"].min())
+end_date = st.sidebar.date_input("End Date", value=all_data["dteday"].max())
 
-# Judul Dashboard
-st.title('📊 Bike Sharing Analysis')
-st.write('Analisis pengaruh musim dan suhu terhadap jumlah peminjaman sepeda.')
+# Filter berdasarkan tanggal
+try:
+    filtered_data = all_data[(all_data["dteday"] >= pd.to_datetime(start_date)) & (all_data["dteday"] <= pd.to_datetime(end_date))]
+except Exception as e:
+    st.warning("Tanggal tidak valid, menampilkan semua data.")
+    filtered_data = all_data
 
-# Filter Interaktif
-season_map = {1: 'Spring', 2: 'Summer', 3: 'Fall', 4: 'Winter'}
-df['season_label'] = df['season'].map(season_map)
+# Pengaruh Musim terhadap Peminjaman Sepeda
+season_rentals = filtered_data.groupby("season")["cnt_day"].mean()
+max_index = season_rentals.idxmax()
+colors = ["#b6bdd8"] * len(season_rentals)
+colors[max_index - 1] = "#565a6b"
 
-selected_season = st.selectbox('Pilih Musim:', df['season_label'].unique())
-filtered_df = df[df['season_label'] == selected_season]
-
-min_temp, max_temp = st.slider('Pilih Rentang Suhu:', float(df['temp'].min()), float(df['temp'].max()), (float(df['temp'].min()), float(df['temp'].max())))
-filtered_df = filtered_df[(filtered_df['temp'] >= min_temp) & (filtered_df['temp'] <= max_temp)]
-
-# Visualisasi 1: Jumlah Peminjaman Berdasarkan Musim
-st.subheader('Jumlah Peminjaman Sepeda Berdasarkan Musim')
-fig, ax = plt.subplots(figsize=(10,5))
-sns.barplot(x='season_label', y='cnt', data=df, ci=None, ax=ax)
-ax.set_xlabel('Musim')
-ax.set_ylabel('Jumlah Peminjaman')
-ax.set_title('Jumlah Peminjaman Sepeda Berdasarkan Musim')
+st.subheader("Pengaruh Musim terhadap Peminjaman Sepeda")
+fig, ax = plt.subplots(figsize=(8, 5))
+ax.bar(["Spring", "Summer", "Fall", "Winter"], season_rentals, color=colors)
+ax.set_xlabel("Season")
+ax.set_ylabel("Average Bike Rentals")
+ax.set_title("Pengaruh Musim terhadap Peminjaman Sepeda")
 st.pyplot(fig)
 
-# Visualisasi 2: Hubungan Suhu dan Peminjaman
-st.subheader('Hubungan antara Suhu dan Peminjaman Sepeda')
-fig, ax = plt.subplots(figsize=(10,5))
-sns.scatterplot(x='temp', y='cnt', data=filtered_df, ax=ax)
-ax.set_xlabel('Suhu')
-ax.set_ylabel('Jumlah Peminjaman')
-ax.set_title('Hubungan antara Suhu dan Jumlah Peminjaman')
+# Tren Peminjaman Sepeda Berdasarkan Bulan
+monthly_rentals = filtered_data.groupby("mnth")["cnt_day"].sum().reset_index()
+
+st.subheader("Tren Peminjaman Sepeda Berdasarkan Bulan")
+fig, ax = plt.subplots(figsize=(10, 5))
+sns.lineplot(x="mnth", y="cnt_day", data=monthly_rentals, marker="o", color="#1f77b4", linewidth=2, ax=ax)
+ax.set_xticks(range(1, 13))
+ax.set_xticklabels(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])
+ax.set_xlabel("Bulan")
+ax.set_ylabel("Total Peminjaman")
+ax.set_title("Tren Peminjaman Sepeda Berdasarkan Bulan", fontsize=14)
+ax.grid(True, linestyle="--", alpha=0.6)
 st.pyplot(fig)
-
-# Insight
-st.write('## 🔍 Insight:')
-st.write(f'- Jumlah peminjaman sepeda tertinggi terjadi di musim **{selected_season}**.')
-st.write('- Peminjaman sepeda meningkat saat suhu lebih tinggi, tetapi ada titik tertentu di mana jumlah peminjaman mulai menurun meski suhu tinggi.')
-
-# Conclusion
-st.write('## ✅ Conclusion:')
-st.write('- **Musim panas memiliki jumlah peminjaman tertinggi.**')
-st.write('- **Ada hubungan positif antara suhu dan jumlah peminjaman, tetapi hanya sampai batas tertentu.**')
